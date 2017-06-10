@@ -19,37 +19,45 @@ public:
     ~Pin()  { }
 
     // data members
-    int     _x;         // x-coordinate of the pin
-    int     _y;         // y-coordinate of the pin
-    size_t  _id;        // id of the pin
-    string  _name;      // name of the pin
+    int         _x;         // x-coordinate of the pin
+    int         _y;         // y-coordinate of the pin
+    size_t      _id;        // id of the pin
+    string      _name;      // name of the pin
 };
 
 
 class Edge
 {
 public:
-    Edge(size_t s, size_t t) :
-        _s(s), _t(t)    {}
+    Edge(size_t s, size_t t, int cost) :
+        _s(s), _t(t), _cost(cost)    {}
     ~Edge() {}
 
     // data members
-    size_t  _s;
-    size_t  _t;
+    int         _cost;      // cost of the edge
+    size_t      _s;         // source
+    size_t      _t;         // sink
 };
 
-
-struct SortPinX
+// key_compare for std::set
+struct PinCmpX
 {
-    bool operator () (Pin& p1, Pin& p2) {
+    bool operator () (const Pin& p1, const Pin& p2) const {
         return (p1._x < p2._x);
     }
 };
 
-struct SortPinY
+struct PinCmpY
+{
+    bool operator () (const Pin& p1, const Pin& p2) const {
+        return (p1._y < p2._y);
+    }
+};
+
+struct SortPinId
 {
     bool operator () (Pin& p1, Pin& p2) {
-        return (p1._y < p2._y);
+        return (p1._id < p2._id);
     }
 };
 

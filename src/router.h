@@ -31,12 +31,15 @@ public:
 
     // modify methods
     void parseInput(fstream& inFile);
-    void spanningGraph();
-    void spanningTree();
+    void spanningGraph(vector<Edge>& edgeList);
+    void EucSpanningTree(vector<Edge>& edgeList);
+    void RecSpanningTree();     // called only after EucSpanningTree is called
+    void steinerTree();
     void route();
 
     // reporting functions
     void reportPin() const;
+    void reportEdge() const;
     void printSummary() const;
     void writeResult(fstream& outFile);
 
@@ -46,8 +49,9 @@ private:
     int             _xmax;      // chip boundary
     int             _ymax;      // chip boundary
     size_t          _pinNum;    // number of pins
+    size_t          _sPinNum;   // number of pins plus steiner points
     vector<Pin>     _pinList;   // list of pins
-    vector<Edge>    _edgeList;  // list of edges
+    vector<Edge>    _treeList;  // list of edges
 };
 
 #endif // ROUTER_H

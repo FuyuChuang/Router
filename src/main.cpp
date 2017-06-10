@@ -33,7 +33,9 @@ int main(int argc, char** argv)
     }
 
     Router* router = new Router(input);
-    router->reportPin();
+    router->route();
+    // router->reportPin();
+    // router->reportEdge();
 
     return 0;
 }
