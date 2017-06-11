@@ -54,10 +54,18 @@ struct PinCmpY
     }
 };
 
+// sorting
 struct SortPinId
 {
     bool operator () (Pin& p1, Pin& p2) {
         return (p1._id < p2._id);
+    }
+};
+
+struct SortEdgeCost
+{
+    bool operator () (Edge& e1, Edge& e2) {
+        return (e1._cost < e2._cost);
     }
 };
 

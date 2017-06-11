@@ -11,9 +11,13 @@
 #include <algorithm>
 #include <cassert>
 #include <set>
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 #include "router.h"
 #include "util.h"
 using namespace std;
+using namespace cv;
 
 #define INF 1000000000
 
@@ -253,6 +257,37 @@ void Router::printSummary() const
 
 void Router::writeResult(fstream& outFile)
 {
+
+    return;
+}
+
+// opencv depended
+void Router::drawResult(string name) const
+{
+    // scaling factor
+    double sf = 1;
+    sf *= (_xmax >= 1000)? pow(0.1, round(log10(_xmax)))*1000: 10;
+
+    size_t imgX = round(_xmax * sf);
+    size_t imgY = round(_ymax * sf);
+    Mat image(imgY, imgX, CV_8UC3);
+    image.setTo(Scalar(255, 255, 255));
+
+    for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
+        size_t x = round(_pinList[i]._x*sf);
+        size_t y = round(_pinList[i]._y*sf);
+        circle(image, Point(y, x), 5, Scalar(0, 128, 0), CV_FILLED);
+    }
+
+    for (size_t i = 0, end = _treeList.size(); i < end; ++i) {
+        size_t sx = round(_pinList[_treeList[i]._s]._x*sf);
+        size_t sy = round(_pinList[_treeList[i]._s]._y*sf);
+        size_t tx = round(_pinList[_treeList[i]._t]._x*sf);
+        size_t ty = round(_pinList[_treeList[i]._t]._y*sf);
+        line(image, Point(sy, sx), Point(ty, tx), Scalar(128, 0, 0));
+    }
+
+    imwrite(name + ".jpg", image);
 
     return;
 }

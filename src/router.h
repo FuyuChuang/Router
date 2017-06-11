@@ -43,6 +43,9 @@ public:
     void printSummary() const;
     void writeResult(fstream& outFile);
 
+    // opencv depended
+    void drawResult(string name) const;
+
 private:
     int             _xmin;      // chip boundary
     int             _ymin;      // chip boundary
