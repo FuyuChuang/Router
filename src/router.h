@@ -2,7 +2,7 @@
   FileName  [ router.h ]
   Synopsis  [ Define the interface of the router. ]
   Author    [ Fu-Yu Chuang ]
-  Date      [ 2017.6.9 ]
+  Date      [ 2017.6.12 ]
 ****************************************************************************/
 #ifndef ROUTER_H
 #define ROUTER_H
@@ -11,7 +11,6 @@
 #include <fstream>
 #include "module.h"
 using namespace std;
-
 
 class Router
 {
@@ -31,10 +30,10 @@ public:
 
     // modify methods
     void parseInput(fstream& inFile);
-    void spanningGraph(vector<Edge>& edgeList);
-    void EucSpanningTree(vector<Edge>& edgeList);
-    void RecSpanningTree();     // called only after EucSpanningTree is called
-    void steinerTree();
+    void genSpanningGraph(vector<Edge>& edgeList);
+    void genSpanningTree(vector<Edge>& edgeList);
+    void genSteinerTree();
+    void rectilinearize();
     void route();
 
     // reporting functions
@@ -42,8 +41,9 @@ public:
     void reportEdge() const;
     void printSummary() const;
     void writeResult(fstream& outFile);
+    long long getCost(const vector<Edge>& treeList) const;
 
-    // opencv depended
+    // opencv-depended
     void drawResult(string name) const;
 
 private:
@@ -51,8 +51,10 @@ private:
     int             _ymin;      // chip boundary
     int             _xmax;      // chip boundary
     int             _ymax;      // chip boundary
-    size_t          _pinNum;    // number of pins
-    size_t          _sPinNum;   // number of pins plus steiner points
+    size_t          _pinNum;    // number of pins (original + steiner)
+    size_t          _oPinNum;   // number of original pins
+    clock_t         _start;     // starting time
+    clock_t         _stop;      // stopping time
     vector<Pin>     _pinList;   // list of pins
     vector<Edge>    _treeList;  // list of edges
 };

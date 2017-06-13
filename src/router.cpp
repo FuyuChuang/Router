@@ -6,7 +6,6 @@
 ****************************************************************************/
 #include <iostream>
 #include <iomanip>
-#include <sstream>
 #include <string>
 #include <algorithm>
 #include <cassert>
@@ -68,6 +67,7 @@ void Router::parseInput(fstream& inFile)
         inFile >> str;
         if (i == 1) {
             _pinNum = stoi(str);
+            _oPinNum = _pinNum;
         }
     }
 
@@ -89,7 +89,7 @@ void Router::parseInput(fstream& inFile)
     return;
 }
 
-void Router::spanningGraph(vector<Edge>& edgeList)
+void Router::genSpanningGraph(vector<Edge>& edgeList)
 {
     // active set
     set<Pin, PinCmpX> actSet1;
@@ -188,8 +188,9 @@ void Router::spanningGraph(vector<Edge>& edgeList)
             ++it2;
             actSet2.erase(tmp_it2);
         }
-        if (tmp_cost < INF)
+        if (tmp_cost < INF) {
             edgeList.push_back(Edge(tmp_pin._id, _pinList[i]._id, tmp_cost));
+        }
         actSet2.insert(_pinList[i]);
     }
 
@@ -199,20 +200,48 @@ void Router::spanningGraph(vector<Edge>& edgeList)
     return;
 }
 
-void Router::EucSpanningTree(vector<Edge>& edgeList)
+void Router::genSpanningTree(vector<Edge>& edgeList)
+{
+    // build up adjacency list
+    vector<vector<size_t> > adjList(_pinNum);
+    for (size_t i = 0, end = edgeList.size(); i < end; ++i) {
+        const Edge& edge = edgeList[i];
+        adjList[edge._s].push_back(edge._t);
+        adjList[edge._t].push_back(edge._s);
+    }
+
+    // Kruskal algorithm for spanning graph
+
+    // TODO: delete
+    _treeList = edgeList;
+
+    return;
+}
+
+void Router::genSteinerTree()
 {
 
     return;
 }
 
-void Router::RecSpanningTree()
+void Router::rectilinearize()
 {
-
-    return;
-}
-
-void Router::steinerTree()
-{
+    for (size_t i = 0, end = _treeList.size(); i < end; ++i) {
+        Edge& edge = _treeList[i];
+        const Pin& s = _pinList[edge._s];
+        const Pin& t = _pinList[edge._t];
+        if (s._x != t._x && s._y != t._y) {
+            Pin newPin(s._x, t._y, _pinNum, "");
+            // Note: _pinList.push_back(newPin) should never done before using s and t
+            // Due to the redistribution of memory of a vector, calling s and t after
+            // push_back() will cause a core dump
+            _treeList.push_back(Edge(s._id, _pinNum, distance(s, newPin)));
+            _treeList[i]._s = _pinNum;
+            _treeList[i]._cost = distance(t, newPin);
+            _pinList.push_back(newPin);
+            ++_pinNum;
+        }
+    }
 
     return;
 }
@@ -220,9 +249,15 @@ void Router::steinerTree()
 void Router::route()
 {
     vector<Edge> edgeList;
-    this->spanningGraph(edgeList);
-    _treeList = edgeList;
 
+    _start = clock();
+    this->genSpanningGraph(edgeList);
+    this->genSpanningTree(edgeList);
+    this->genSteinerTree();
+    this->rectilinearize();
+    _stop = clock();
+
+    this->printSummary();
     return;
 }
 
@@ -251,14 +286,43 @@ void Router::reportEdge() const
 
 void Router::printSummary() const
 {
-
+    cout << "NumRoutedPins = " << _oPinNum << endl;
+    cout << "WireLength = " << this->getCost(_treeList) << endl;
+    cout << "Time = " << (double)(_stop - _start) / CLOCKS_PER_SEC << " secs " << endl;
     return;
 }
 
 void Router::writeResult(fstream& outFile)
 {
+    outFile << "NumRoutedPins = " << _oPinNum << endl;
+    outFile << "WireLength = " << this->getCost(_treeList) << endl;
+
+    for (size_t i = 0, end = _treeList.size(); i < end; ++i) {
+        const Pin& s = _pinList[_treeList[i]._s];
+        const Pin& t = _pinList[_treeList[i]._t];
+        assert(s._x == t._x || s._y == t._y);
+        if (s._x == t._x) {
+            outFile << "H-line (" << s._x << "," << s._y << ") (" << t._x << "," << t._y << ")" << endl;
+        }
+        else {
+            outFile << "V-line (" << s._x << "," << s._y << ") (" << t._x << "," << t._y << ")" << endl;
+        }
+    }
 
     return;
+}
+
+long long Router::getCost(const vector<Edge>& treeList) const
+{
+    long long cost = 0;
+
+    for (size_t i = 0, end = treeList.size(); i < end; ++i) {
+        const Pin& s = _pinList[treeList[i]._s];
+        const Pin& t = _pinList[treeList[i]._t];
+        cost += distance(s, t);
+    }
+
+    return cost;
 }
 
 // opencv depended
@@ -276,7 +340,10 @@ void Router::drawResult(string name) const
     for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
         size_t x = round(_pinList[i]._x*sf);
         size_t y = round(_pinList[i]._y*sf);
-        circle(image, Point(y, x), 5, Scalar(0, 128, 0), CV_FILLED);
+        if (i < _oPinNum)
+            circle(image, Point(y, x), 5, Scalar(0, 128, 0), CV_FILLED);
+        else
+            circle(image, Point(y, x), 5, Scalar(0, 0, 128), CV_FILLED);
     }
 
     for (size_t i = 0, end = _treeList.size(); i < end; ++i) {

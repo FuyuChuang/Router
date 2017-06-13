@@ -39,7 +39,7 @@ public:
     size_t      _t;         // sink
 };
 
-// key_compare for std::set
+// key_compare for std::set (rb-tree)
 struct PinCmpX
 {
     bool operator () (const Pin& p1, const Pin& p2) const {
