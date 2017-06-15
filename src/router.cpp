@@ -20,20 +20,22 @@ using namespace cv;
 
 #define INF 1000000000
 
-int distance(const Pin& p1, const Pin& p2)
+// get Manhattan distance
+int getDistance(const Pin& p1, const Pin& p2)
 {
     return (abs(p1._x - p2._x) + abs(p1._y - p2._y));
 }
 
+// check in region
 bool inRegion(int r, const Pin& p1, const Pin& p2)
 {
     switch(r) {
         case 1:
-            return (p1._x - p1._y >= p2._x - p2._y);
+            return (p1._x - p1._y > p2._x - p2._y);
         case 2:
             return (p1._x - p1._y <= p2._x - p2._y);
         case 3:
-            return (p1._x + p1._y <= p2._x + p2._y);
+            return (p1._x + p1._y < p2._x + p2._y);
         case 4:
             return (p1._x + p1._y >= p2._x + p2._y);
         default:
@@ -92,106 +94,106 @@ void Router::parseInput(fstream& inFile)
 void Router::genSpanningGraph(vector<Edge>& edgeList)
 {
     // active set
-    set<Pin, PinCmpX> actSet1;
-    set<Pin, PinCmpY> actSet2;
-    set<Pin, PinCmpX>::iterator it1, tmp_it1;
-    set<Pin, PinCmpY>::iterator it2, tmp_it2;
+    set<Pin, PinCmpXDec> actSet1;
+    set<Pin, PinCmpYDec> actSet2;
+    set<Pin, PinCmpXDec>::iterator it1, tmp_it1;
+    set<Pin, PinCmpYDec>::iterator it2, tmp_it2;
 
-    // temporary pin
-    Pin tmp_pin;
-    int tmp_cost;
+    // candidate pin
+    Pin cand_pin;
+    int cand_cost;
 
     // sort by x + y
     sort(_pinList.begin(), _pinList.end(), SortPinBLUR());
-    actSet1.clear();
-    actSet2.clear();
-    actSet1.insert(Pin(-INF, INF, _pinNum, ""));
-    actSet2.insert(Pin(INF, -INF, _pinNum, ""));
+    actSet1.insert(Pin(-INF, INF, _pinNum, "NeverHasR1Neighbor"));
+    actSet2.insert(Pin(INF, -INF, _pinNum, "NeverHasR2Neighbor"));
 
-    for (size_t i = 0; i < _pinNum; ++i) {
+    assert(_pinList.size() == _pinNum);
+    for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
         // region 1
-        it1 = --actSet1.upper_bound(_pinList[i]);
-        tmp_cost = INF;
+        it1 = actSet1.lower_bound(_pinList[i]);
         while (inRegion(1, *it1, _pinList[i])) {
-            assert(it1 != actSet1.begin());
-            // cout << "region 1: " << it1->_id << " " << _pinList[i]._id << endl;
-            if (distance(*it1, _pinList[i]) < tmp_cost) {
-                tmp_pin = *it1;
-                tmp_cost = distance(*it1, _pinList[i]);
-            }
+            assert(it1 != actSet1.end());
+            cand_pin = *it1;
+            cand_cost = getDistance(*it1, _pinList[i]);
+            edgeList.push_back(Edge(cand_pin._id, _pinList[i]._id, cand_cost));
+            // cout << "Region 1: " << cand_pin._id << " " << _pinList[i]._id << endl;
+
             tmp_it1 = it1;
-            --it1;
+            ++it1;
             actSet1.erase(tmp_it1);
-        }
-        if (tmp_cost < INF) {
-            edgeList.push_back(Edge(tmp_pin._id, _pinList[i]._id, tmp_cost));
         }
         actSet1.insert(_pinList[i]);
 
         // region 2
-        it2 = --actSet2.upper_bound(_pinList[i]);
-        tmp_cost = INF;
+        it2 = actSet2.upper_bound(_pinList[i]);
         while (inRegion(2, *it2, _pinList[i])) {
-            assert(it2 != actSet2.begin());
-            // cout << "region 2: " << it2->_id << " " << _pinList[i]._id << endl;
-            if (distance(*it2, _pinList[i]) < tmp_cost) {
-                tmp_pin = *it2;
-                tmp_cost = distance(*it2, _pinList[i]);
-            }
-            tmp_it2 = it2;
-            --it2;
-            actSet2.erase(tmp_it2);
-        }
-        if (tmp_cost < INF) {
-            edgeList.push_back(Edge(tmp_pin._id, _pinList[i]._id, tmp_cost));
-        }
-        actSet2.insert(_pinList[i]);
-    }
-
-    // sort by x - y
-    sort(_pinList.begin(), _pinList.end(), SortPinULBR());
-    actSet1.clear();
-    actSet2.clear();
-    actSet1.insert(Pin(-INF, -INF, _pinNum, ""));
-    actSet2.insert(Pin(INF, INF, _pinNum, ""));
-    for (size_t i = 0; i < _pinNum; ++i) {
-        // region 4
-        it1 = --actSet1.upper_bound(_pinList[i]);
-        tmp_cost = INF;
-        while (inRegion(4, *it1, _pinList[i])) {
-            assert(it1 != actSet1.begin());
-            // cout << "region 4: " << it1->_id << " " << _pinList[i]._id << endl;
-            if (distance(*it1, _pinList[i]) < tmp_cost) {
-                tmp_pin = *it1;
-                tmp_cost = distance(*it1, _pinList[i]);
-            }
-            tmp_it1 = it1;
-            --it1;
-            actSet1.erase(tmp_it1);
-        }
-        if (tmp_cost < INF) {
-            edgeList.push_back(Edge(tmp_pin._id, _pinList[i]._id, tmp_cost));
-        }
-        actSet1.insert(_pinList[i]);
-
-        // region 3
-        it2 = actSet2.lower_bound(_pinList[i]);
-        tmp_cost = INF;
-        while (inRegion(3, *it2, _pinList[i])) {
             assert(it2 != actSet2.end());
-            // cout << "region 3: " << it2->_id << " " << _pinList[i]._id << endl;
-            if (distance(*it2, _pinList[i]) < tmp_cost) {
-                tmp_pin = *it2;
-                tmp_cost = distance(*it2, _pinList[i]);
-            }
+            cand_pin = *it2;
+            cand_cost = getDistance(*it2, _pinList[i]);
+            edgeList.push_back(Edge(cand_pin._id, _pinList[i]._id, cand_cost));
+            // cout << "Region 2: " << cand_pin._id << " " << _pinList[i]._id << endl;
+
             tmp_it2 = it2;
             ++it2;
             actSet2.erase(tmp_it2);
         }
-        if (tmp_cost < INF) {
-            edgeList.push_back(Edge(tmp_pin._id, _pinList[i]._id, tmp_cost));
-        }
         actSet2.insert(_pinList[i]);
+    }
+
+    set<Pin, PinCmpYInc> actSet3;
+    set<Pin, PinCmpXDec> actSet4;
+    set<Pin, PinCmpYInc>::iterator it3, tmp_it3;
+    set<Pin, PinCmpXDec>::iterator it4, tmp_it4;
+
+    // sort by x - y
+    sort(_pinList.begin(), _pinList.end(), SortPinULBR());
+    actSet3.insert(Pin(INF, INF, _pinNum, "NeverHasR3Neighbor"));
+    actSet4.insert(Pin(-INF, -INF, _pinNum, "NeverHasR4Neighbor"));
+
+    assert(_pinList.size() == _pinNum);
+    for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
+        // region 3
+        it3 = actSet3.lower_bound(_pinList[i]);
+        while (inRegion(3, *it3, _pinList[i])) {
+            assert(it3 != actSet3.end());
+            cand_pin = *it3;
+            cand_cost = getDistance(*it3, _pinList[i]);
+            edgeList.push_back(Edge(cand_pin._id, _pinList[i]._id, cand_cost));
+            // cout << "Region 3: " << cand_pin._id << " " << _pinList[i]._id << endl;
+
+            tmp_it3 = it3;
+            ++it3;
+            actSet3.erase(tmp_it3);
+        }
+        actSet3.insert(_pinList[i]);
+        /*
+        for (set<Pin, PinCmpYInc>::iterator it = actSet3.begin(); it != actSet3.end(); ++it) {
+            cout << it->_y << " ";
+        }
+        cout << endl;
+        */
+
+        // region 4
+        it4 = actSet4.upper_bound(_pinList[i]);
+        while (inRegion(4, *it4, _pinList[i])) {
+            assert(it4 != actSet4.end());
+            cand_pin = *it4;
+            cand_cost = getDistance(*it4, _pinList[i]);
+            edgeList.push_back(Edge(cand_pin._id, _pinList[i]._id, cand_cost));
+            // cout << "Region 4: " << cand_pin._id << " " << _pinList[i]._id << endl;
+
+            tmp_it4 = it4;
+            ++it4;
+            actSet4.erase(tmp_it4);
+        }
+        actSet4.insert(_pinList[i]);
+        /*
+        for (set<Pin, PinCmpXDec>::iterator it = actSet4.begin(); it != actSet4.end(); ++it) {
+            cout << it->_x << " ";
+        }
+        cout << endl;
+        */
     }
 
     // reset order
@@ -235,9 +237,9 @@ void Router::rectilinearize()
             // Note: _pinList.push_back(newPin) should never done before using s and t
             // Due to the redistribution of memory of a vector, calling s and t after
             // push_back() will cause a core dump
-            _treeList.push_back(Edge(s._id, _pinNum, distance(s, newPin)));
+            _treeList.push_back(Edge(s._id, _pinNum, getDistance(s, newPin)));
             _treeList[i]._s = _pinNum;
-            _treeList[i]._cost = distance(t, newPin);
+            _treeList[i]._cost = getDistance(t, newPin);
             _pinList.push_back(newPin);
             ++_pinNum;
         }
@@ -254,7 +256,7 @@ void Router::route()
     this->genSpanningGraph(edgeList);
     this->genSpanningTree(edgeList);
     this->genSteinerTree();
-    this->rectilinearize();
+    //this->rectilinearize();
     _stop = clock();
 
     this->printSummary();
@@ -319,7 +321,7 @@ long long Router::getCost(const vector<Edge>& treeList) const
     for (size_t i = 0, end = treeList.size(); i < end; ++i) {
         const Pin& s = _pinList[treeList[i]._s];
         const Pin& t = _pinList[treeList[i]._t];
-        cost += distance(s, t);
+        cost += getDistance(s, t);
     }
 
     return cost;
@@ -339,19 +341,20 @@ void Router::drawResult(string name) const
 
     for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
         size_t x = round(_pinList[i]._x*sf);
-        size_t y = round(_pinList[i]._y*sf);
+        size_t y = imgY - round(_pinList[i]._y*sf);
         if (i < _oPinNum)
-            circle(image, Point(y, x), 5, Scalar(0, 128, 0), CV_FILLED);
+            circle(image, Point(x, y), 5, Scalar(0, 128, 0), CV_FILLED);
         else
-            circle(image, Point(y, x), 5, Scalar(0, 0, 128), CV_FILLED);
+            circle(image, Point(x, y), 5, Scalar(0, 0, 128), CV_FILLED);
     }
 
+    cout << _treeList.size() << endl;
     for (size_t i = 0, end = _treeList.size(); i < end; ++i) {
         size_t sx = round(_pinList[_treeList[i]._s]._x*sf);
-        size_t sy = round(_pinList[_treeList[i]._s]._y*sf);
+        size_t sy = imgY - round(_pinList[_treeList[i]._s]._y*sf);
         size_t tx = round(_pinList[_treeList[i]._t]._x*sf);
-        size_t ty = round(_pinList[_treeList[i]._t]._y*sf);
-        line(image, Point(sy, sx), Point(ty, tx), Scalar(128, 0, 0));
+        size_t ty = imgY - round(_pinList[_treeList[i]._t]._y*sf);
+        line(image, Point(sx, sy), Point(tx, ty), Scalar(128, 0, 0));
     }
 
     imwrite(name + ".jpg", image);
