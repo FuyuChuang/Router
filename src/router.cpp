@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cassert>
 #include <set>
+#include <map>
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -18,7 +19,8 @@
 using namespace std;
 using namespace cv;
 
-#define INF 1000000000
+auto larger = [](int x, int y) { return x > y; };
+using rev_multimap = multimap<int, int, decltype(larger)>;
 
 // get Manhattan distance
 int getDistance(const Pin& p1, const Pin& p2)
@@ -94,110 +96,131 @@ void Router::parseInput(fstream& inFile)
 void Router::genSpanningGraph(vector<Edge>& edgeList)
 {
     // active set
-    set<Pin, PinCmpXDec> actSet1;
-    set<Pin, PinCmpYDec> actSet2;
-    set<Pin, PinCmpXDec>::iterator it1, tmp_it1;
-    set<Pin, PinCmpYDec>::iterator it2, tmp_it2;
+    rev_multimap actSet1(larger);
+    rev_multimap actSet2(larger);
+    multimap<int, int> actSet3;
+    rev_multimap actSet4(larger);
 
-    // candidate pin
-    Pin cand_pin;
-    int cand_cost;
-
-    // sort by x + y
-    sort(_pinList.begin(), _pinList.end(), SortPinBLUR());
-    actSet1.insert(Pin(-INF, INF, _pinNum, "NeverHasR1Neighbor"));
-    actSet2.insert(Pin(INF, -INF, _pinNum, "NeverHasR2Neighbor"));
-
-    assert(_pinList.size() == _pinNum);
+    // Sort by x + y
+    vector<int> sorted_pin_ids;
     for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
-        // region 1
-        it1 = actSet1.lower_bound(_pinList[i]);
-        while (inRegion(1, *it1, _pinList[i])) {
-            assert(it1 != actSet1.end());
-            cand_pin = *it1;
-            cand_cost = getDistance(*it1, _pinList[i]);
-            edgeList.push_back(Edge(cand_pin._id, _pinList[i]._id, cand_cost));
-            // cout << "Region 1: " << cand_pin._id << " " << _pinList[i]._id << endl;
-
-            tmp_it1 = it1;
-            ++it1;
-            actSet1.erase(tmp_it1);
-        }
-        actSet1.insert(_pinList[i]);
-
-        // region 2
-        it2 = actSet2.upper_bound(_pinList[i]);
-        while (inRegion(2, *it2, _pinList[i])) {
-            assert(it2 != actSet2.end());
-            cand_pin = *it2;
-            cand_cost = getDistance(*it2, _pinList[i]);
-            edgeList.push_back(Edge(cand_pin._id, _pinList[i]._id, cand_cost));
-            // cout << "Region 2: " << cand_pin._id << " " << _pinList[i]._id << endl;
-
-            tmp_it2 = it2;
-            ++it2;
-            actSet2.erase(tmp_it2);
-        }
-        actSet2.insert(_pinList[i]);
+        const int id = i;
+        sorted_pin_ids.push_back(id);
     }
 
-    set<Pin, PinCmpYInc> actSet3;
-    set<Pin, PinCmpXDec> actSet4;
-    set<Pin, PinCmpYInc>::iterator it3, tmp_it3;
-    set<Pin, PinCmpXDec>::iterator it4, tmp_it4;
+    sort(sorted_pin_ids.begin(), sorted_pin_ids.end(),
+        [&](int pin_a_id, int pin_b_id) {
+         const Pin& pin_a = _pinList[pin_a_id];
+         const Pin& pin_b = _pinList[pin_b_id];
+         return pin_a._x + pin_a._y < pin_b._x + pin_b._y;
+    });
+
+    for (int current_pin_id : sorted_pin_ids) {
+        const Pin& current_pin = _pinList[current_pin_id];
+        const int current_pin_x = current_pin._x;
+        const int current_pin_y = current_pin._y;
+
+        actSet1.insert(make_pair(current_pin_x, current_pin_id));
+        actSet2.insert(make_pair(current_pin_y, current_pin_id));
+
+        // Region 1
+        for (auto it = actSet1.lower_bound(current_pin._x); it != actSet1.end();) {
+            const int pin_id = it->second;
+            if (pin_id != current_pin_id) {
+                const Pin& pin = _pinList[pin_id];
+                const int pin_x = it->first;
+                assert(pin_x == pin._x);
+                const int pin_y = pin._y;
+                if (pin_x - pin_y > current_pin_x - current_pin_y) {
+                    edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
+                    it = actSet1.erase(it);
+                }
+                else {
+                    break;
+                }
+            }
+            else {
+                ++it;
+            }
+        }
+
+        // Region 2
+        for (auto it = actSet2.upper_bound(current_pin._y); it != actSet2.end();) {
+            const int pin_id = it->second;
+            if (pin_id != current_pin_id) {
+                const Pin& pin = _pinList[pin_id];
+                const int pin_x = pin._x;
+                const int pin_y = it->first;
+                if (pin_x - pin_y <= current_pin_x - current_pin_y) {
+                    edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
+                    it = actSet2.erase(it);
+                }
+                else {
+                    break;
+                }
+            }
+            else {
+                ++it;
+            }
+        }
+    }
 
     // sort by x - y
-    sort(_pinList.begin(), _pinList.end(), SortPinULBR());
-    actSet3.insert(Pin(INF, INF, _pinNum, "NeverHasR3Neighbor"));
-    actSet4.insert(Pin(-INF, -INF, _pinNum, "NeverHasR4Neighbor"));
+    sort(sorted_pin_ids.begin(), sorted_pin_ids.end(),
+        [&](int pin_a_id, int pin_b_id) {
+         const Pin& pin_a = _pinList[pin_a_id];
+         const Pin& pin_b = _pinList[pin_b_id];
+         return pin_a._x - pin_a._y < pin_b._x - pin_b._y;
+    });
 
-    assert(_pinList.size() == _pinNum);
-    for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
-        // region 3
-        it3 = actSet3.lower_bound(_pinList[i]);
-        while (inRegion(3, *it3, _pinList[i])) {
-            assert(it3 != actSet3.end());
-            cand_pin = *it3;
-            cand_cost = getDistance(*it3, _pinList[i]);
-            edgeList.push_back(Edge(cand_pin._id, _pinList[i]._id, cand_cost));
-            // cout << "Region 3: " << cand_pin._id << " " << _pinList[i]._id << endl;
+    for (int current_pin_id : sorted_pin_ids) {
+        const Pin& current_pin = _pinList[current_pin_id];
+        const int current_pin_x = current_pin._x;
+        const int current_pin_y = current_pin._y;
 
-            tmp_it3 = it3;
-            ++it3;
-            actSet3.erase(tmp_it3);
-        }
-        actSet3.insert(_pinList[i]);
-        /*
-        for (set<Pin, PinCmpYInc>::iterator it = actSet3.begin(); it != actSet3.end(); ++it) {
-            cout << it->_y << " ";
-        }
-        cout << endl;
-        */
+        actSet3.insert(make_pair(current_pin_y, current_pin_id));
+        actSet4.insert(make_pair(current_pin_x, current_pin_id));
 
-        // region 4
-        it4 = actSet4.upper_bound(_pinList[i]);
-        while (inRegion(4, *it4, _pinList[i])) {
-            assert(it4 != actSet4.end());
-            cand_pin = *it4;
-            cand_cost = getDistance(*it4, _pinList[i]);
-            edgeList.push_back(Edge(cand_pin._id, _pinList[i]._id, cand_cost));
-            // cout << "Region 4: " << cand_pin._id << " " << _pinList[i]._id << endl;
+        // Region 3
+        for (auto it = actSet3.lower_bound(current_pin_y); it != actSet3.end();) {
+            const int pin_id = it->second;
+            if (pin_id != current_pin_id) {
+                const Pin& pin = _pinList[pin_id];
+                const int pin_x = pin._x;
+                const int pin_y = it->first;
+                if (pin_x + pin_y < current_pin_x + current_pin_y) {
+                    edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
+                    it = actSet3.erase(it);
+                }
+                else {
+                    break;
+                }
+            }
+            else {
+                ++it;
+            }
+        }
 
-            tmp_it4 = it4;
-            ++it4;
-            actSet4.erase(tmp_it4);
+        // Region 4
+        for (auto it = actSet4.upper_bound(current_pin._x); it != actSet4.end();) {
+            const int pin_id = it->second;
+            if (pin_id != current_pin_id) {
+                const Pin& pin = _pinList[pin_id];
+                const int pin_x = it->first;
+                const int pin_y = pin._y;
+                if (pin_x + pin_y >= current_pin_x + current_pin_y) {
+                    edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
+                    it = actSet4.erase(it);
+                }
+                else {
+                    break;
+                }
+            }
+            else {
+                ++it;
+            }
         }
-        actSet4.insert(_pinList[i]);
-        /*
-        for (set<Pin, PinCmpXDec>::iterator it = actSet4.begin(); it != actSet4.end(); ++it) {
-            cout << it->_x << " ";
-        }
-        cout << endl;
-        */
     }
-
-    // reset order
-    std::sort(_pinList.begin(), _pinList.end(), SortPinId());
 
     return;
 }
