@@ -55,31 +55,17 @@ public:
 };
 
 // key_compare for std::set (rb-tree)
-struct PinCmpXInc
+struct PinCmpX
 {
     bool operator () (const Pin& p1, const Pin& p2) const {
         return (p1._x < p2._x);
     }
 };
 
-struct PinCmpYInc
+struct PinCmpY
 {
     bool operator () (const Pin& p1, const Pin& p2) const {
         return (p1._y < p2._y);
-    }
-};
-
-struct PinCmpXDec
-{
-    bool operator () (const Pin& p1, const Pin& p2) const {
-        return !(p1._x < p2._x);
-    }
-};
-
-struct PinCmpYDec
-{
-    bool operator () (const Pin& p1, const Pin& p2) const {
-        return !(p1._y < p2._y);
     }
 };
 

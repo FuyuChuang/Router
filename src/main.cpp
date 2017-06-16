@@ -34,7 +34,8 @@ int main(int argc, char** argv)
 
     Router* router = new Router(input);
     router->route();
-    router->drawResult(argv[2]);
+    router->writeResult(output);
+    // router->drawResult(argv[2]);
     // router->reportPin();
     // router->reportEdge();
 

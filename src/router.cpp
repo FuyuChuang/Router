@@ -11,6 +11,7 @@
 #include <cassert>
 #include <set>
 #include <map>
+#include <boost/pending/disjoint_sets.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -18,6 +19,8 @@
 #include "util.h"
 using namespace std;
 using namespace cv;
+
+using DisjointSet = boost::disjoint_sets<size_t*, size_t*>;
 
 auto larger = [](int x, int y) { return x > y; };
 using rev_multimap = multimap<int, int, decltype(larger)>;
@@ -101,37 +104,30 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
     multimap<int, int> actSet3;
     rev_multimap actSet4(larger);
 
-    // Sort by x + y
     vector<int> sorted_pin_ids;
     for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
-        const int id = i;
-        sorted_pin_ids.push_back(id);
+        sorted_pin_ids.push_back(i);
     }
 
+    // Sort by x + y
     sort(sorted_pin_ids.begin(), sorted_pin_ids.end(),
-        [&](int pin_a_id, int pin_b_id) {
-         const Pin& pin_a = _pinList[pin_a_id];
-         const Pin& pin_b = _pinList[pin_b_id];
-         return pin_a._x + pin_a._y < pin_b._x + pin_b._y;
+         [&](int id1, int id2) {
+         const Pin& pin1 = _pinList[id1];
+         const Pin& pin2 = _pinList[id2];
+         return pin1._x + pin1._y < pin2._x + pin2._y;
     });
 
     for (int current_pin_id : sorted_pin_ids) {
         const Pin& current_pin = _pinList[current_pin_id];
-        const int current_pin_x = current_pin._x;
-        const int current_pin_y = current_pin._y;
-
-        actSet1.insert(make_pair(current_pin_x, current_pin_id));
-        actSet2.insert(make_pair(current_pin_y, current_pin_id));
+        actSet1.insert(make_pair(current_pin._x, current_pin_id));
+        actSet2.insert(make_pair(current_pin._y, current_pin_id));
 
         // Region 1
         for (auto it = actSet1.lower_bound(current_pin._x); it != actSet1.end();) {
             const int pin_id = it->second;
             if (pin_id != current_pin_id) {
                 const Pin& pin = _pinList[pin_id];
-                const int pin_x = it->first;
-                assert(pin_x == pin._x);
-                const int pin_y = pin._y;
-                if (pin_x - pin_y > current_pin_x - current_pin_y) {
+                if (inRegion(1, pin, current_pin)) {
                     edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
                     it = actSet1.erase(it);
                 }
@@ -149,9 +145,7 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
             const int pin_id = it->second;
             if (pin_id != current_pin_id) {
                 const Pin& pin = _pinList[pin_id];
-                const int pin_x = pin._x;
-                const int pin_y = it->first;
-                if (pin_x - pin_y <= current_pin_x - current_pin_y) {
+                if (inRegion(2, pin, current_pin)) {
                     edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
                     it = actSet2.erase(it);
                 }
@@ -167,28 +161,23 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
 
     // sort by x - y
     sort(sorted_pin_ids.begin(), sorted_pin_ids.end(),
-        [&](int pin_a_id, int pin_b_id) {
-         const Pin& pin_a = _pinList[pin_a_id];
-         const Pin& pin_b = _pinList[pin_b_id];
-         return pin_a._x - pin_a._y < pin_b._x - pin_b._y;
+         [&](int id1, int id2) {
+         const Pin& pin1 = _pinList[id1];
+         const Pin& pin2 = _pinList[id2];
+         return pin1._x - pin1._y < pin2._x - pin2._y;
     });
 
     for (int current_pin_id : sorted_pin_ids) {
         const Pin& current_pin = _pinList[current_pin_id];
-        const int current_pin_x = current_pin._x;
-        const int current_pin_y = current_pin._y;
-
-        actSet3.insert(make_pair(current_pin_y, current_pin_id));
-        actSet4.insert(make_pair(current_pin_x, current_pin_id));
+        actSet3.insert(make_pair(current_pin._y, current_pin_id));
+        actSet4.insert(make_pair(current_pin._x, current_pin_id));
 
         // Region 3
-        for (auto it = actSet3.lower_bound(current_pin_y); it != actSet3.end();) {
+        for (auto it = actSet3.lower_bound(current_pin._y); it != actSet3.end();) {
             const int pin_id = it->second;
             if (pin_id != current_pin_id) {
                 const Pin& pin = _pinList[pin_id];
-                const int pin_x = pin._x;
-                const int pin_y = it->first;
-                if (pin_x + pin_y < current_pin_x + current_pin_y) {
+                if (inRegion(3, pin, current_pin)) {
                     edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
                     it = actSet3.erase(it);
                 }
@@ -206,9 +195,7 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
             const int pin_id = it->second;
             if (pin_id != current_pin_id) {
                 const Pin& pin = _pinList[pin_id];
-                const int pin_x = it->first;
-                const int pin_y = pin._y;
-                if (pin_x + pin_y >= current_pin_x + current_pin_y) {
+                if (inRegion(4, pin, current_pin)) {
                     edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
                     it = actSet4.erase(it);
                 }
@@ -227,18 +214,39 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
 
 void Router::genSpanningTree(vector<Edge>& edgeList)
 {
+    _treeList.clear();
     // build up adjacency list
+    /*
     vector<vector<size_t> > adjList(_pinNum);
     for (size_t i = 0, end = edgeList.size(); i < end; ++i) {
         const Edge& edge = edgeList[i];
         adjList[edge._s].push_back(edge._t);
         adjList[edge._t].push_back(edge._s);
     }
+    */
 
     // Kruskal algorithm for spanning graph
+    const int edgeNum = edgeList.size();
+    sort(edgeList.begin(), edgeList.end(), SortEdgeCost());
+    vector<size_t> ranks(edgeNum);
+    vector<size_t> parents(edgeNum);
+    DisjointSet disjoint_set(&ranks[0], &parents[0]);
 
-    // TODO: delete
-    _treeList = edgeList;
+    for (size_t i = 0, end = edgeList.size(); i < end; ++i) {
+        disjoint_set.make_set(i);
+    }
+
+    for (size_t i = 0, end = edgeList.size(); i < end; ++i) {
+        const Edge& edge = edgeList[i];
+        const size_t sid = edge._s;
+        const size_t tid = edge._t;
+        const size_t sset = disjoint_set.find_set(sid);
+        const size_t tset = disjoint_set.find_set(tid);
+        if (sset != tset) {
+            _treeList.push_back(edge);
+            disjoint_set.link(sid, tid);
+        }
+    }
 
     return;
 }
@@ -279,7 +287,7 @@ void Router::route()
     this->genSpanningGraph(edgeList);
     this->genSpanningTree(edgeList);
     this->genSteinerTree();
-    //this->rectilinearize();
+    this->rectilinearize();
     _stop = clock();
 
     this->printSummary();
@@ -326,7 +334,7 @@ void Router::writeResult(fstream& outFile)
         const Pin& s = _pinList[_treeList[i]._s];
         const Pin& t = _pinList[_treeList[i]._t];
         assert(s._x == t._x || s._y == t._y);
-        if (s._x == t._x) {
+        if (s._y == t._y) {
             outFile << "H-line (" << s._x << "," << s._y << ") (" << t._x << "," << t._y << ")" << endl;
         }
         else {
@@ -371,7 +379,6 @@ void Router::drawResult(string name) const
             circle(image, Point(x, y), 5, Scalar(0, 0, 128), CV_FILLED);
     }
 
-    cout << _treeList.size() << endl;
     for (size_t i = 0, end = _treeList.size(); i < end; ++i) {
         size_t sx = round(_pinList[_treeList[i]._s]._x*sf);
         size_t sy = imgY - round(_pinList[_treeList[i]._s]._y*sf);
