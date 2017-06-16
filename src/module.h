@@ -14,7 +14,7 @@ class Pin
 {
 public:
     Pin() {}
-    Pin(int x, int y, size_t id, string name) :
+    Pin(int x, int y, size_t id, string name = "") :
         _x(x), _y(y), _id(id), _name(name) {}
     ~Pin() {}
 
@@ -43,30 +43,18 @@ class Query
 {
 public:
     Query(size_t w, size_t u, const Edge& edge) :
-        _w(w), _u(u), _cEdge(edge) {}
+        _w(w), _u(u), _cEdge(edge), _counter(0) {}
     ~Query() {}
 
     // data members
+    //size_t      _x;         // neighbor pin of either s or t of the cEdge
+    //size_t      _y;         // either s or t
+    size_t      _counter;
     size_t      _w;         // neighbor pin of either s or t of the cEdge
     size_t      _u;         // either s or t
     Edge        _cEdge;     // the edge that w is trying to connect to
     Edge        _dEdge;     // the longest edge on the created cycle (to be queried)
     int         _gain;      // gain from deleting edge
-};
-
-// key_compare for std::set (rb-tree)
-struct PinCmpX
-{
-    bool operator () (const Pin& p1, const Pin& p2) const {
-        return (p1._x < p2._x);
-    }
-};
-
-struct PinCmpY
-{
-    bool operator () (const Pin& p1, const Pin& p2) const {
-        return (p1._y < p2._y);
-    }
 };
 
 // sorting
@@ -105,7 +93,14 @@ struct SortPinULBR
 struct SortQueryGain
 {
     bool operator () (Query& q1, Query& q2) {
-        return (q1._gain < q2._gain);
+        return (q1._gain > q2._gain);
+    }
+};
+
+struct EdgeDiff
+{
+    bool operator () (const Edge& e1, const Edge& e2) const {
+        return (e1._s < e2._s || (e1._s == e2._s && e1._t < e2._t));
     }
 };
 

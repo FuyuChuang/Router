@@ -2,7 +2,7 @@
   FileName  [ router.cpp ]
   Synopsis  [ Implementation of the router. ]
   Author    [ Fu-Yu Chuang ]
-  Date      [ 2017.6.9 ]
+  Date      [ 2017.6.15 ]
 ****************************************************************************/
 #include <iostream>
 #include <iomanip>
@@ -16,11 +16,12 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include "router.h"
+#include "mergeTree.h"
 #include "util.h"
 using namespace std;
 using namespace cv;
 
-using DisjointSet = boost::disjoint_sets<size_t*, size_t*>;
+// using DisjointSet = boost::disjoint_sets<size_t*, size_t*>;
 
 auto larger = [](int x, int y) { return x > y; };
 using rev_multimap = multimap<int, int, decltype(larger)>;
@@ -104,7 +105,7 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
     multimap<int, int> actSet3;
     rev_multimap actSet4(larger);
 
-    vector<int> sorted_pin_ids;
+    vector<size_t> sorted_pin_ids;
     for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
         sorted_pin_ids.push_back(i);
     }
@@ -114,10 +115,11 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
          [&](int id1, int id2) {
          const Pin& pin1 = _pinList[id1];
          const Pin& pin2 = _pinList[id2];
-         return pin1._x + pin1._y < pin2._x + pin2._y;
+         return (pin1._x + pin1._y < pin2._x + pin2._y);
     });
 
-    for (int current_pin_id : sorted_pin_ids) {
+    for (size_t i = 0, end = sorted_pin_ids.size(); i < end; ++i) {
+        size_t current_pin_id = sorted_pin_ids[i];
         const Pin& current_pin = _pinList[current_pin_id];
         actSet1.insert(make_pair(current_pin._x, current_pin_id));
         actSet2.insert(make_pair(current_pin._y, current_pin_id));
@@ -164,10 +166,11 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
          [&](int id1, int id2) {
          const Pin& pin1 = _pinList[id1];
          const Pin& pin2 = _pinList[id2];
-         return pin1._x - pin1._y < pin2._x - pin2._y;
+         return (pin1._x - pin1._y < pin2._x - pin2._y);
     });
 
-    for (int current_pin_id : sorted_pin_ids) {
+    for (size_t i = 0, end = sorted_pin_ids.size(); i < end; ++i) {
+        size_t current_pin_id = sorted_pin_ids[i];
         const Pin& current_pin = _pinList[current_pin_id];
         actSet3.insert(make_pair(current_pin._y, current_pin_id));
         actSet4.insert(make_pair(current_pin._x, current_pin_id));
@@ -215,45 +218,81 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
 void Router::genSpanningTree(vector<Edge>& edgeList)
 {
     _treeList.clear();
+
     // build up adjacency list
-    /*
     vector<vector<size_t> > adjList(_pinNum);
     for (size_t i = 0, end = edgeList.size(); i < end; ++i) {
         const Edge& edge = edgeList[i];
         adjList[edge._s].push_back(edge._t);
         adjList[edge._t].push_back(edge._s);
     }
-    */
 
     // Kruskal algorithm for spanning graph
-    const int edgeNum = edgeList.size();
     sort(edgeList.begin(), edgeList.end(), SortEdgeCost());
-    vector<size_t> ranks(edgeNum);
-    vector<size_t> parents(edgeNum);
-    DisjointSet disjoint_set(&ranks[0], &parents[0]);
-
-    for (size_t i = 0, end = edgeList.size(); i < end; ++i) {
-        disjoint_set.make_set(i);
-    }
-
-    for (size_t i = 0, end = edgeList.size(); i < end; ++i) {
+    MergeTree mergeTree(_pinList);
+    for (size_t i = 0, end_i = edgeList.size(); i < end_i; ++i) {
         const Edge& edge = edgeList[i];
-        const size_t sid = edge._s;
-        const size_t tid = edge._t;
-        const size_t sset = disjoint_set.find_set(sid);
-        const size_t tset = disjoint_set.find_set(tid);
-        if (sset != tset) {
+        if (!mergeTree.sameSet(edge._s, edge._t)) {
             _treeList.push_back(edge);
-            disjoint_set.link(sid, tid);
+            for (size_t j = 0, end_j = adjList[edge._s].size(); j < end_j; ++j) {
+                if (adjList[edge._s][j] != edge._t) {
+                    mergeTree.addQuery(adjList[edge._s][j], edge._s, edge);
+                }
+            }
+            for (size_t j = 0, end_j = adjList[edge._t].size(); j < end_j; ++j) {
+                if (adjList[edge._t][j] != edge._s)
+                    mergeTree.addQuery(adjList[edge._t][j], edge._t, edge);
+            }
+            mergeTree.addEdge(edge);
         }
     }
+
+    mergeTree.answerQuery();
+    vector<Query> queryResult;
+    mergeTree.getQueryResult(queryResult);
+
+    this->genSteinerTree(queryResult);
 
     return;
 }
 
-void Router::genSteinerTree()
+void Router::genSteinerTree(const vector<Query>& queryResult)
 {
+    set<Edge, EdgeDiff> steinerSet;
+    set<Edge, EdgeDiff>::iterator it1, it2;
 
+    for (size_t i = 0, end = _treeList.size(); i < end; ++i) {
+        steinerSet.insert(_treeList[i]);
+    }
+
+    _treeList.clear();
+    for (size_t i = 0, end = queryResult.size(); i < end; ++i) {
+        const Query& query = queryResult[i];
+        const Edge& cEdge = query._cEdge;
+        const Edge& dEdge = query._dEdge;
+        it1 = steinerSet.find(cEdge);
+        it2 = steinerSet.find(dEdge);
+        if (it1 != steinerSet.end() && it2 != steinerSet.end()) {
+            steinerSet.erase(it1);
+            steinerSet.erase(it2);
+            int x  = _pinList[query._w]._x, y  = _pinList[query._w]._y;
+            int sx = _pinList[cEdge._s]._x, sy = _pinList[cEdge._s]._y;
+            int tx = _pinList[cEdge._t]._x, ty = _pinList[cEdge._t]._y;
+            if (sx > tx) swap(sx, tx);
+            if (sy > ty) swap(sy, ty);
+            int newX = (x >= tx ? tx : (x <= sx ? sx : x));
+            int newY = (y >= ty ? ty : (y <= sy ? sy : y));
+            Pin newPin(newX, newY, _pinNum);
+            _pinList.push_back(newPin);
+            _treeList.push_back(Edge(query._w, _pinNum, getDistance(_pinList[query._w], newPin)));
+            _treeList.push_back(Edge(cEdge._s, _pinNum, getDistance(_pinList[cEdge._s], newPin)));
+            _treeList.push_back(Edge(cEdge._t, _pinNum, getDistance(_pinList[cEdge._t], newPin)));
+            _pinNum += 1;
+        }
+    }
+    for (it1 = steinerSet.begin(); it1 != steinerSet.end(); ++it1) {
+        _treeList.push_back(*it1);
+    }
     return;
 }
 
@@ -286,7 +325,6 @@ void Router::route()
     _start = clock();
     this->genSpanningGraph(edgeList);
     this->genSpanningTree(edgeList);
-    this->genSteinerTree();
     this->rectilinearize();
     _stop = clock();
 
@@ -345,9 +383,9 @@ void Router::writeResult(fstream& outFile)
     return;
 }
 
-long long Router::getCost(const vector<Edge>& treeList) const
+long Router::getCost(const vector<Edge>& treeList) const
 {
-    long long cost = 0;
+    long cost = 0;
 
     for (size_t i = 0, end = treeList.size(); i < end; ++i) {
         const Pin& s = _pinList[treeList[i]._s];

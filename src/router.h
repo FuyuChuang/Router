@@ -32,7 +32,7 @@ public:
     void parseInput(fstream& inFile);
     void genSpanningGraph(vector<Edge>& edgeList);
     void genSpanningTree(vector<Edge>& edgeList);
-    void genSteinerTree();
+    void genSteinerTree(const vector<Query>& queryResult);
     void rectilinearize();
     void route();
 
@@ -41,7 +41,7 @@ public:
     void reportEdge() const;
     void printSummary() const;
     void writeResult(fstream& outFile);
-    long long getCost(const vector<Edge>& treeList) const;
+    long getCost(const vector<Edge>& treeList) const;
 
     // opencv-depended
     void drawResult(string name) const;
