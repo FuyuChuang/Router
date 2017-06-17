@@ -17,7 +17,6 @@
 #include <opencv2/highgui/highgui.hpp>
 #include "router.h"
 #include "mergeTree.h"
-#include "util.h"
 using namespace std;
 using namespace cv;
 
@@ -25,6 +24,16 @@ using namespace cv;
 
 auto larger = [](int x, int y) { return x > y; };
 using rev_multimap = multimap<int, int, decltype(larger)>;
+
+// for parsing usage
+void getCoordinate(int& x, int& y, string& str)
+{
+    size_t pos = str.find_first_of(',');
+    size_t last = str.find_last_of(')');
+    x = stoi(str.substr(1, pos-1));
+    y = stoi(str.substr(pos+1, last-pos-1));
+    return;
+}
 
 // get Manhattan distance
 int getDistance(const Pin& p1, const Pin& p2)
@@ -97,7 +106,7 @@ void Router::parseInput(fstream& inFile)
     return;
 }
 
-void Router::genSpanningGraph(vector<Edge>& edgeList)
+void Router::genSpanningGraph()
 {
     // active set
     rev_multimap actSet1(larger);
@@ -130,7 +139,7 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
             if (pin_id != current_pin_id) {
                 const Pin& pin = _pinList[pin_id];
                 if (inRegion(1, pin, current_pin)) {
-                    edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
+                    _edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
                     it = actSet1.erase(it);
                 }
                 else {
@@ -148,7 +157,7 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
             if (pin_id != current_pin_id) {
                 const Pin& pin = _pinList[pin_id];
                 if (inRegion(2, pin, current_pin)) {
-                    edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
+                    _edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
                     it = actSet2.erase(it);
                 }
                 else {
@@ -181,7 +190,7 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
             if (pin_id != current_pin_id) {
                 const Pin& pin = _pinList[pin_id];
                 if (inRegion(3, pin, current_pin)) {
-                    edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
+                    _edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
                     it = actSet3.erase(it);
                 }
                 else {
@@ -199,7 +208,7 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
             if (pin_id != current_pin_id) {
                 const Pin& pin = _pinList[pin_id];
                 if (inRegion(4, pin, current_pin)) {
-                    edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
+                    _edgeList.push_back(Edge(pin_id, current_pin_id, getDistance(pin, current_pin)));
                     it = actSet4.erase(it);
                 }
                 else {
@@ -211,77 +220,72 @@ void Router::genSpanningGraph(vector<Edge>& edgeList)
             }
         }
     }
-
     return;
 }
 
-void Router::genSpanningTree(vector<Edge>& edgeList)
+void Router::genSpanningTree()
 {
     _treeList.clear();
 
     // build up adjacency list
     vector<vector<size_t> > adjList(_pinNum);
-    for (size_t i = 0, end = edgeList.size(); i < end; ++i) {
-        const Edge& edge = edgeList[i];
+    for (size_t i = 0, end = _edgeList.size(); i < end; ++i) {
+        const Edge& edge = _edgeList[i];
         adjList[edge._s].push_back(edge._t);
         adjList[edge._t].push_back(edge._s);
     }
 
-    // Kruskal algorithm for spanning graph
-    sort(edgeList.begin(), edgeList.end(), SortEdgeCost());
+    // Kruskal algorithm
+    sort(_edgeList.begin(), _edgeList.end(), SortEdgeCost());
     MergeTree mergeTree(_pinList);
-    for (size_t i = 0, end_i = edgeList.size(); i < end_i; ++i) {
-        const Edge& edge = edgeList[i];
-        if (!mergeTree.sameSet(edge._s, edge._t)) {
+    for (size_t i = 0, end_i = _edgeList.size(); i < end_i; ++i) {
+        const Edge& edge = _edgeList[i];
+        size_t s1 = mergeTree.findSet(edge._s);
+        size_t s2 = mergeTree.findSet(edge._t);
+        if (s1 != s2) {
             _treeList.push_back(edge);
             for (size_t j = 0, end_j = adjList[edge._s].size(); j < end_j; ++j) {
-                if (adjList[edge._s][j] != edge._t) {
-                    mergeTree.addQuery(adjList[edge._s][j], edge._s, edge);
-                }
+                mergeTree.addQuery(adjList[edge._s][j], edge._s, edge);
             }
             for (size_t j = 0, end_j = adjList[edge._t].size(); j < end_j; ++j) {
-                if (adjList[edge._t][j] != edge._s)
-                    mergeTree.addQuery(adjList[edge._t][j], edge._t, edge);
+                mergeTree.addQuery(adjList[edge._t][j], edge._t, edge);
             }
             mergeTree.addEdge(edge);
         }
     }
-
     mergeTree.answerQuery();
-    vector<Query> queryResult;
-    mergeTree.getQueryResult(queryResult);
-
-    this->genSteinerTree(queryResult);
+    mergeTree.getQueryList(_queryList);
 
     return;
 }
 
-void Router::genSteinerTree(const vector<Query>& queryResult)
+void Router::genSteinerTree()
 {
-    set<Edge, EdgeDiff> steinerSet;
-    set<Edge, EdgeDiff>::iterator it1, it2;
+    set<Edge, EdgeCmp> edgeList;
 
     for (size_t i = 0, end = _treeList.size(); i < end; ++i) {
-        steinerSet.insert(_treeList[i]);
+        edgeList.insert(_treeList[i]);
     }
 
     _treeList.clear();
-    for (size_t i = 0, end = queryResult.size(); i < end; ++i) {
-        const Query& query = queryResult[i];
+    for (size_t i = 0, end = _queryList.size(); i < end; ++i) {
+        const Query& query = _queryList[i];
         const Edge& cEdge = query._cEdge;
         const Edge& dEdge = query._dEdge;
-        it1 = steinerSet.find(cEdge);
-        it2 = steinerSet.find(dEdge);
-        if (it1 != steinerSet.end() && it2 != steinerSet.end()) {
-            steinerSet.erase(it1);
-            steinerSet.erase(it2);
+        auto it1 = edgeList.find(cEdge);
+        auto it2 = edgeList.find(dEdge);
+
+        if (it1 != edgeList.end() && it2 != edgeList.end()) {
+            edgeList.erase(it1);
+            edgeList.erase(it2);
             int x  = _pinList[query._w]._x, y  = _pinList[query._w]._y;
             int sx = _pinList[cEdge._s]._x, sy = _pinList[cEdge._s]._y;
             int tx = _pinList[cEdge._t]._x, ty = _pinList[cEdge._t]._y;
-            if (sx > tx) swap(sx, tx);
-            if (sy > ty) swap(sy, ty);
-            int newX = (x >= tx ? tx : (x <= sx ? sx : x));
-            int newY = (y >= ty ? ty : (y <= sy ? sy : y));
+            int maxX = max(sx, tx), minX = min(sx, tx);
+            int maxY = max(sy, ty), minY = min(sy, ty);
+            int newX = (x > maxX)? maxX: (x < minX)? minX: x;
+            int newY = (y > maxY)? maxY: (y < minY)? minY: y;
+
             Pin newPin(newX, newY, _pinNum);
             _pinList.push_back(newPin);
             _treeList.push_back(Edge(query._w, _pinNum, getDistance(_pinList[query._w], newPin)));
@@ -290,7 +294,9 @@ void Router::genSteinerTree(const vector<Query>& queryResult)
             _pinNum += 1;
         }
     }
-    for (it1 = steinerSet.begin(); it1 != steinerSet.end(); ++it1) {
+
+    // untouched edges
+    for (auto it1 = edgeList.begin(); it1 != edgeList.end(); ++it1) {
         _treeList.push_back(*it1);
     }
     return;
@@ -320,11 +326,10 @@ void Router::rectilinearize()
 
 void Router::route()
 {
-    vector<Edge> edgeList;
-
     _start = clock();
-    this->genSpanningGraph(edgeList);
-    this->genSpanningTree(edgeList);
+    this->genSpanningGraph();
+    this->genSpanningTree();
+    this->genSteinerTree();
     this->rectilinearize();
     _stop = clock();
 
@@ -357,9 +362,11 @@ void Router::reportEdge() const
 
 void Router::printSummary() const
 {
+    cout << "=======================================================" << endl;
     cout << "NumRoutedPins = " << _oPinNum << endl;
     cout << "WireLength = " << this->getCost(_treeList) << endl;
     cout << "Time = " << (double)(_stop - _start) / CLOCKS_PER_SEC << " secs " << endl;
+    cout << "=======================================================" << endl;
     return;
 }
 

@@ -7,7 +7,6 @@
 #ifndef MODULE_H
 #define MODULE_H
 
-#include <string>
 using namespace std;
 
 class Pin
@@ -43,50 +42,23 @@ class Query
 {
 public:
     Query(size_t w, size_t u, const Edge& edge) :
-        _w(w), _u(u), _cEdge(edge), _counter(0) {}
+        _w(w), _u(u), _cEdge(edge), _c(0) {}
     ~Query() {}
 
     // data members
-    //size_t      _x;         // neighbor pin of either s or t of the cEdge
-    //size_t      _y;         // either s or t
-    size_t      _counter;
     size_t      _w;         // neighbor pin of either s or t of the cEdge
     size_t      _u;         // either s or t
+    size_t      _c;         // counter for dfs
     Edge        _cEdge;     // the edge that w is trying to connect to
-    Edge        _dEdge;     // the longest edge on the created cycle (to be queried)
+    Edge        _dEdge;     // the longest edge on the created cycle
     int         _gain;      // gain from deleting edge
 };
 
 // sorting
-struct SortPinId
-{
-    bool operator () (Pin& p1, Pin& p2) {
-        return (p1._id < p2._id);
-    }
-};
-
 struct SortEdgeCost
 {
     bool operator () (Edge& e1, Edge& e2) {
         return (e1._cost < e2._cost);
-    }
-};
-
-// bottom-left to upper-right
-// find nearest points in R1, R2
-struct SortPinBLUR
-{
-    bool operator () (Pin& p1, Pin& p2) {
-        return ((p1._x + p1._y) < (p2._x + p2._y));
-    }
-};
-
-// upper-left to bottom-right
-// find nearest points in R3, R4
-struct SortPinULBR
-{
-    bool operator () (Pin& p1, Pin& p2) {
-        return ((p1._x - p1._y) < (p2._x - p2._y));
     }
 };
 
@@ -97,10 +69,10 @@ struct SortQueryGain
     }
 };
 
-struct EdgeDiff
+struct EdgeCmp
 {
     bool operator () (const Edge& e1, const Edge& e2) const {
-        return (e1._s < e2._s || (e1._s == e2._s && e1._t < e2._t));
+        return (e1._t < e2._t || (e1._t == e2._t && e1._s < e2._s));
     }
 };
 

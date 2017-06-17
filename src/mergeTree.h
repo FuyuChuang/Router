@@ -32,37 +32,38 @@ class MergeTree
 {
 public:
     // constructor and destructor
+    // MergeTree() {}
     MergeTree(const vector<Pin>& pinList);
     ~MergeTree() {}
 
     // disjoint set operations
-    void makeSet();
+    void makeSet(size_t n);
     void unionSet(size_t x, size_t y, size_t t);
     bool sameSet(size_t x, size_t y);
-    size_t find(size_t x, vector<size_t>& parent);
+    size_t findSet(size_t x);
 
     // merging tree operations
     void addEdge(const Edge& edge);
+    size_t findLca(size_t x);
 
     // query operations
     void addQuery(size_t x, size_t y, const Edge& edge);
     void answerQuery();
     void answerQueryRec(size_t idx);
-    void getQueryResult(vector<Query>& queryResult) const;
+    void getQueryList(vector<Query>& queryList) const;
 
 private:
     const vector<Pin>   _pinList;
-    size_t              _pinNum;
-    size_t              _mergeTop;
 
     // for spanning tree
     vector<size_t>      _par;           // record the parent of each node
     vector<size_t>      _rank;          // record the rank of each node
 
     // for binary merging tree
+    size_t              _mergeCount;
     vector<Node>        _mergeTree;     // binary merging tree
     vector<size_t>      _mergePar;      // record the parent of each node on tree
-    vector<size_t>      _mergePtr;      // record tree roots
+    vector<size_t>      _mergeRoot;     // record tree roots
 
     // for query
     vector<Query>           _queryList;

@@ -10,6 +10,7 @@
 #include <vector>
 #include <fstream>
 #include "module.h"
+#include "mergeTree.h"
 using namespace std;
 
 class Router
@@ -26,13 +27,13 @@ public:
     int getYmin() const { return _ymin; }
     int getXmax() const { return _xmax; }
     int getYmax() const { return _ymax; }
-    int getPinNum() const { return _pinNum; }
+    int getPinNum() const   { return _pinNum; }
 
     // modify methods
     void parseInput(fstream& inFile);
-    void genSpanningGraph(vector<Edge>& edgeList);
-    void genSpanningTree(vector<Edge>& edgeList);
-    void genSteinerTree(const vector<Query>& queryResult);
+    void genSpanningGraph();
+    void genSpanningTree();
+    void genSteinerTree();
     void rectilinearize();
     void route();
 
@@ -47,16 +48,18 @@ public:
     void drawResult(string name) const;
 
 private:
-    int             _xmin;      // chip boundary
-    int             _ymin;      // chip boundary
-    int             _xmax;      // chip boundary
-    int             _ymax;      // chip boundary
-    size_t          _pinNum;    // number of pins (original + steiner)
-    size_t          _oPinNum;   // number of original pins
-    clock_t         _start;     // starting time
-    clock_t         _stop;      // stopping time
-    vector<Pin>     _pinList;   // list of pins
-    vector<Edge>    _treeList;  // list of edges
+    int             _xmin;          // chip boundary
+    int             _ymin;          // chip boundary
+    int             _xmax;          // chip boundary
+    int             _ymax;          // chip boundary
+    size_t          _pinNum;        // number of pins (original + steiner)
+    size_t          _oPinNum;       // number of original pins
+    clock_t         _start;         // starting time
+    clock_t         _stop;          // stopping time
+    vector<Pin>     _pinList;       // list of pins
+    vector<Edge>    _edgeList;      // list of edges
+    vector<Edge>    _treeList;      // list of edges on tree
+    vector<Query>   _queryList;     // list of querys
 };
 
 #endif // ROUTER_H
