@@ -114,21 +114,21 @@ void Router::genSpanningGraph()
     multimap<int, int> actSet3;
     rev_multimap actSet4(larger);
 
-    vector<size_t> sorted_pin_ids;
+    vector<size_t> pinIds;
     for (size_t i = 0, end = _pinList.size(); i < end; ++i) {
-        sorted_pin_ids.push_back(i);
+        pinIds.push_back(i);
     }
 
     // Sort by x + y
-    sort(sorted_pin_ids.begin(), sorted_pin_ids.end(),
+    sort(pinIds.begin(), pinIds.end(),
          [&](int id1, int id2) {
          const Pin& pin1 = _pinList[id1];
          const Pin& pin2 = _pinList[id2];
          return (pin1._x + pin1._y < pin2._x + pin2._y);
     });
 
-    for (size_t i = 0, end = sorted_pin_ids.size(); i < end; ++i) {
-        size_t current_pin_id = sorted_pin_ids[i];
+    for (size_t i = 0, end = pinIds.size(); i < end; ++i) {
+        size_t current_pin_id = pinIds[i];
         const Pin& current_pin = _pinList[current_pin_id];
         actSet1.insert(make_pair(current_pin._x, current_pin_id));
         actSet2.insert(make_pair(current_pin._y, current_pin_id));
@@ -171,15 +171,15 @@ void Router::genSpanningGraph()
     }
 
     // sort by x - y
-    sort(sorted_pin_ids.begin(), sorted_pin_ids.end(),
+    sort(pinIds.begin(), pinIds.end(),
          [&](int id1, int id2) {
          const Pin& pin1 = _pinList[id1];
          const Pin& pin2 = _pinList[id2];
          return (pin1._x - pin1._y < pin2._x - pin2._y);
     });
 
-    for (size_t i = 0, end = sorted_pin_ids.size(); i < end; ++i) {
-        size_t current_pin_id = sorted_pin_ids[i];
+    for (size_t i = 0, end = pinIds.size(); i < end; ++i) {
+        size_t current_pin_id = pinIds[i];
         const Pin& current_pin = _pinList[current_pin_id];
         actSet3.insert(make_pair(current_pin._y, current_pin_id));
         actSet4.insert(make_pair(current_pin._x, current_pin_id));

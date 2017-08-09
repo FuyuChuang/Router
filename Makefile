@@ -4,7 +4,7 @@ CFLAGS = `pkg-config --cflags opencv`
 LIBS = `pkg-config --libs opencv`
 SOURCES=src/router.cpp src/main.cpp src/mergeTree.cpp
 OBJECTS=$(SOURCES:.c=.o)
-EXECUTABLE=Router
+EXECUTABLE=router
 INCLUDES=src/module.h src/router.h src/mergeTree.h
 
 all: $(SOURCES) $(EXECUTABLE)
